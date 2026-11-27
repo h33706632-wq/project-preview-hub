@@ -7,6 +7,8 @@ import { useFavorites } from "@/quran/hooks/useFavorites";
 import { Skeleton } from "@/quran/components/ui/skeleton";
 import { OfflineDownloadButton } from "@/quran/components/offline-download-button";
 import { getCachedAudioObjectUrl } from "@/quran/lib/offline-audio";
+import { usePlaybackClock } from "@/quran/hooks/usePlaybackClock";
+import { formatPlaybackTime as formatTime } from "@/quran/lib/playback-time";
 import { useStopOnAppExit } from "@/quran/hooks/useStopOnAppExit";
 
 let _autoPlayOnMount = false;
@@ -23,8 +25,6 @@ export default function QuranTajweedPlayer() {
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
   const [buffering, setBuffering] = useState(false);
   useStopOnAppExit(audioRef, () => { setPlaying(false); setBuffering(false); });
   const [playMode, setPlayModeState] = useState(_playMode);
@@ -36,6 +36,12 @@ export default function QuranTajweedPlayer() {
   const audioSourceUrl = source.url;
   const loadedNumberRef = useRef<number | null>(null);
   const sourceObjectUrlRef = useRef<string | null>(null);
+  const trackKey = String(number);
+  const loadedTrackRef = useRef<string | null>(null);
+  const resumeTimeRef = useRef(0);
+  const { currentTime, duration, setCurrentTime, setDuration, syncTime, seekTo } = usePlaybackClock(
+    audioRef, source.number === number ? audioSourceUrl : "",
+  );
 
   const prevNum  = number > 1   ? number - 1 : null;
   const nextNum  = number < 114 ? number + 1 : null;
@@ -72,7 +78,10 @@ export default function QuranTajweedPlayer() {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !audioSourceUrl || source.number !== number) return;
-    const keepPlaying = _autoPlayOnMount || (loadedNumberRef.current === number && !audio.paused);
+    const sameTrack = loadedTrackRef.current === trackKey;
+    const keepPlaying = _autoPlayOnMount || (sameTrack && !audio.paused);
+    resumeTimeRef.current = sameTrack && Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+    loadedTrackRef.current = trackKey;
     _autoPlayOnMount = false;
     loadedNumberRef.current = number;
     audio.pause();
@@ -85,7 +94,7 @@ export default function QuranTajweedPlayer() {
     if (keepPlaying) {
       audio.play().then(() => setPlaying(true)).catch(() => {});
     }
-  }, [number, audioSourceUrl, source.number]);
+  }, [number, audioSourceUrl, source.number, trackKey]);
 
   function togglePlay() {
     if (!audioRef.current) return;
@@ -102,7 +111,7 @@ export default function QuranTajweedPlayer() {
     if (playMode === "repeat") {
       const audio = audioRef.current;
       if (audio) {
-        audio.currentTime = 0;
+        seekTo(0);
         void audio.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
       }
     } else if (playMode === "shuffle") {
@@ -115,7 +124,7 @@ export default function QuranTajweedPlayer() {
       setLocation(`/quran-tajweed/${nextNum}`);
     } else {
       setPlaying(false);
-      setCurrentTime(0);
+      syncTime();
     }
   }
 
@@ -132,24 +141,16 @@ export default function QuranTajweedPlayer() {
   }
 
   function seekBy(seconds: number) {
-    if (!audioRef.current) return;
-    const nextTime = Math.min(Math.max(audioRef.current.currentTime + seconds, 0), duration || Infinity);
-    audioRef.current.currentTime = nextTime;
-    setCurrentTime(nextTime);
+    const audio = audioRef.current;
+    if (audio) seekTo(audio.currentTime + seconds);
   }
 
-  /** Browsers refine the length of a recitation while it loads; always show the latest real value. */
-  function syncDuration() {
-    const d = audioRef.current?.duration;
-    if (d && Number.isFinite(d)) setDuration(d);
-  }
-
-  function formatTime(s: number) {
-    if (!isFinite(s)) return "0:00:00";
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const sec = Math.floor(s % 60);
-    return `${h}:${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
+  function onMetadata() {
+    if (resumeTimeRef.current > 0) {
+      seekTo(resumeTimeRef.current);
+      resumeTimeRef.current = 0;
+    }
+    syncTime();
   }
 
   return (
@@ -191,15 +192,14 @@ export default function QuranTajweedPlayer() {
 
         {/* seek bar */}
         <div className="space-y-2">
-          <input type="range" min={0} max={duration || 100} value={currentTime}
+          <input type="range" dir="ltr" min={0} max={duration || 1} step={0.01} value={currentTime} disabled={!duration}
             onChange={(e) => {
-              const t = parseFloat(e.target.value);
-              if (audioRef.current) { audioRef.current.currentTime = t; setCurrentTime(t); }
+              seekTo(Number(e.target.value));
             }}
             className="w-full h-2 accent-primary cursor-pointer" data-testid="input-tajweed-seek" />
           <div className="flex justify-between font-sans text-xs text-muted-foreground" dir="ltr">
-            <span>{formatTime(duration ? Math.min(currentTime, duration) : currentTime)}</span>
-            <span>{formatTime(duration)}</span>
+            <span data-testid="player-elapsed">{formatTime(currentTime)}</span>
+            <span data-testid="player-duration">{duration ? formatTime(duration) : "—:——:——"}</span>
           </div>
         </div>
 
@@ -246,7 +246,7 @@ export default function QuranTajweedPlayer() {
         {/* restart / quick navigation */}
         <div className="flex items-center justify-between gap-4">
           <button onClick={() => {
-            if (audioRef.current) { audioRef.current.currentTime = 0; setCurrentTime(0); }
+            seekTo(0);
           }} className="flex items-center gap-1.5 text-muted-foreground hover:text-primary transition-colors text-xs font-sans" data-testid="button-tajweed-restart">
             <RotateCcw className="w-4 h-4" /> {tr("إعادة")}</button>
           {prevSurah && <button onClick={goPrev} className="text-primary hover:underline text-xs font-sans">{prevSurah.name}</button>}
@@ -270,13 +270,11 @@ export default function QuranTajweedPlayer() {
         {tr("تلاوة الشيخ محمد صديق المنشاوي — المصحف المجوّد")}</p>
 
       <audio ref={audioRef}
-        onTimeUpdate={() => { const a = audioRef.current; if (a && loadedNumberRef.current === number) setCurrentTime(a.currentTime); }}
-        onLoadedMetadata={syncDuration}
-        onDurationChange={syncDuration}
+        onLoadedMetadata={onMetadata}
         onEnded={handleEnded}
         onWaiting={() => setBuffering(true)}
         onPlaying={() => setBuffering(false)}
-        preload="none" />
+        preload="metadata" />
     </div>
   );
 }
