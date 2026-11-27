@@ -36,10 +36,11 @@ interface PageGroup {
 const _cache: Record<number, MushafSurah> = {};
 const _pending: Record<number, Promise<MushafSurah>> = {};
 
-function withoutBasmala(text: string): string {
-  const plain = text.replace(/[\u064B-\u065F\u0670]/g, "");
-  const basmala = "بسم الله الرحمن الرحيم";
-  return plain.startsWith(basmala) ? plain.slice(basmala.length).trimStart() : text;
+function withoutBasmala(text: string, surah: number, ayah: number): string {
+  if (surah === 1 || ayah !== 1) return text;
+  const words = text.split(/\s+/);
+  const plain = words.slice(0, 4).join(" ").replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, "").replace(/ٱ/g, "ا");
+  return plain === "بسم الله الرحمن الرحيم" ? words.slice(4).join(" ") : text;
 }
 
 async function fetchMushaf(n: number): Promise<MushafSurah> {
@@ -54,10 +55,10 @@ async function fetchMushaf(n: number): Promise<MushafSurah> {
           englishName: data.englishName,
           englishNameTranslation: data.englishNameTranslation,
           revelationType: data.revelationType,
-          numberOfAyahs: data.numberOfAyahs,
+          numberOfAyahs: data.numberOfAyahs ?? data.ayahs.length,
           ayahs: data.ayahs.map((a: any): MushafAyah => ({
             numberInSurah: a.numberInSurah,
-            text: withoutBasmala(a.text),
+            text: withoutBasmala(a.text, data.number, a.numberInSurah),
             page: a.page,
             juz: a.juz,
             hizbQuarter: a.hizbQuarter,
