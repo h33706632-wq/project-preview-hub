@@ -270,6 +270,7 @@
 
 .quran-home-art {
   position: relative;
+  padding-top: env(safe-area-inset-top, 0px);
   width: 100%;
   min-height: 100dvh;
   padding-bottom: clamp(24px, 4vw, 48px);

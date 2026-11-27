@@ -2,7 +2,7 @@ import { Link } from "@/quran/wouter-shim";
 import illuminatedBookAsset from "@/assets/home-buttons/illuminated-book-button.jpg.asset.json";
 import minshawiHeaderUrl from "@/assets/minshawi-header-clear.webp";
 import { useLanguage } from "@/quran/components/language-provider";
-import { LanguagePicker } from "@/quran/components/language-picker";
+import quranEnglishAsset from "@/assets/home-buttons/quran-english-button.png.asset.json";
 import { BookOpen, Sparkles, Headphones, Compass, Clock, Heart } from "lucide-react";
 
 const homeBackground = `${import.meta.env.BASE_URL}quran-home-soft.jpg`;
@@ -94,8 +94,8 @@ export default function Home() {
           aria-hidden="true"
         />
         <nav className="home-button-stack" aria-label={t("أقسام التطبيق")}>
-          <div className="flex flex-wrap items-center justify-between gap-3 py-2"><LanguagePicker/><Link href="/notifications" className="text-sm text-primary underline">{language === "ar" ? "الإعدادات" : "Settings"}</Link></div>
-          <Link href="/quran-english" className="flex items-center gap-3 rounded-lg border border-primary/30 bg-card p-4 text-primary" data-testid="link-quran-english"><BookOpen className="size-6 shrink-0"/><span className="font-semibold">{language === "ar" ? "القرآن الكريم بالإنجليزية" : "Quran in English"}</span></Link>
+          <div className="flex justify-end py-1"><Link href="/notifications" className="text-sm text-primary underline">{language === "ar" ? "الإعدادات" : "Settings"}</Link></div>
+          <Link href="/quran-english" className="home-image-button" data-testid="link-quran-english" aria-label="The Holy Quran in English"><img src={quranEnglishAsset.url} alt="The Holy Quran in English — Complete and written out" draggable={false} /></Link>
               <Link
                 href="/illuminated-book"
                 className="home-image-button"
