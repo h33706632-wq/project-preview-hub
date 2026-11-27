@@ -1,7 +1,7 @@
 import { useLanguage } from "@/quran/components/language-provider";
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useSearch } from "@/quran/wouter-shim";
-import { ChevronRight, Play, Pause, Square, ChevronsDown, Languages, Repeat, ListMusic, Volume2, Minus, Plus } from "lucide-react";
+import { ChevronRight, Play, Pause, Square, SkipForward, Languages, Repeat, ListMusic, Volume2, Minus, Plus } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { englishSurahOptions } from "@/quran/lib/english-quran";
 import { Skeleton } from "@/quran/components/ui/skeleton";
@@ -270,64 +270,53 @@ export default function QuranWrittenReader() {
   const [menuAyah, setMenuAyah] = useState<number | null>(null);
   const [, navigate] = useLocation();
 
+  const curRef = useRef<number | null>(null);
   const stopAudio = () => {
+    curRef.current = null;
     audioRef.current?.pause();
     setPlayingAyah(null); setPaused(false);
   };
+  const followRef = useRef(true);
   const playAyah = (n: number) => {
     if (!audioRef.current) audioRef.current = new Audio();
     const a = audioRef.current;
+    curRef.current = n; followRef.current = true;
+    a.onended = () => {
+      const cur = curRef.current;
+      if (cur == null || !surah || modeRef.current === "ayah") { curRef.current = null; setPlayingAyah(null); return; }
+      if (cur < surah.numberOfAyahs) { playAyah(cur + 1); return; }
+      curRef.current = null; setPlayingAyah(null);
+      if (modeRef.current === "continuous" && number < 114) navigate(`/quran-written/${number + 1}?play=1`);
+    };
+    a.onerror = () => { setAudioError(true); curRef.current = null; setPlayingAyah(null); };
+    a.ontimeupdate = () => {
+      const el = curRef.current ? ayahRefs.current[curRef.current] : null;
+      if (!el || !followRef.current || !a.duration) return;
+      const header = (document.querySelector("[data-reader-header]") as HTMLElement | null)?.offsetHeight ?? 0;
+      const r = el.getBoundingClientRect();
+      const avail = window.innerHeight - header - 24;
+      const top = r.top + window.scrollY - header - 12;
+      const extra = Math.max(0, r.height - avail * 0.7);
+      const target = top + extra * Math.min(1, a.currentTime / a.duration);
+      if (Math.abs(target - window.scrollY) > 8) window.scrollTo({ top: target, behavior: "smooth" });
+    };
     a.src = ayahAudioUrl(number, n);
     setPlayingAyah(n); setPaused(false); setAudioError(false);
-    a.play().catch(() => { setAudioError(true); setPlayingAyah(null); });
+    a.play().catch(() => { setAudioError(true); curRef.current = null; setPlayingAyah(null); });
   };
   const start = (n: number, mode: PlayMode) => { modeRef.current = mode; setMenuAyah(null); playAyah(n); };
+  const stopAll = () => { curRef.current = null; stopAudio(); };
 
-  useEffect(() => {
-    const a = audioRef.current ?? (audioRef.current = new Audio());
-    const onEnded = () => {
-      setPlayingAyah((cur) => {
-        if (cur == null || !surah) return null;
-        if (modeRef.current === "ayah") return null;
-        if (cur < surah.numberOfAyahs) { queueMicrotask(() => playAyah(cur + 1)); return cur; }
-        if (modeRef.current === "continuous" && number < 114) navigate(`/quran-written/${number + 1}?play=1`);
-        return null;
-      });
-    };
-    const onErr = () => { setAudioError(true); setPlayingAyah(null); };
-    a.addEventListener("ended", onEnded); a.addEventListener("error", onErr);
-    return () => { a.removeEventListener("ended", onEnded); a.removeEventListener("error", onErr); };
-  }, [surah, number]);
-  useEffect(() => () => { audioRef.current?.pause(); }, []);
-  useEffect(() => { stopAudio(); }, [number]);
+  useEffect(() => () => { curRef.current = null; audioRef.current?.pause(); }, []);
+  useEffect(() => { stopAll(); }, [number]);
   useEffect(() => {
     if (autoPlay && surah && surah.number === number) start(1, "continuous");
   }, [autoPlay, surah]);
-  useEffect(() => {
-    if (playingAyah) ayahRefs.current[playingAyah]?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [playingAyah, showTr]);
   const togglePause = () => {
     const a = audioRef.current; if (!a) return;
     if (a.paused) { a.play(); setPaused(false); } else { a.pause(); setPaused(true); }
   };
 
-  /* Auto-scroll */
-  const [scrolling, setScrolling] = useState(false);
-  const [speed, setSpeed] = useState(2);
-  useEffect(() => {
-    if (!scrolling) return;
-    let raf = 0, last = performance.now(), acc = 0;
-    const step = (t: number) => {
-      acc += ((t - last) / 1000) * speed * 12; last = t;
-      if (acc >= 1) { window.scrollBy(0, Math.floor(acc)); acc -= Math.floor(acc); }
-      if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 2) { setScrolling(false); return; }
-      raf = requestAnimationFrame(step);
-    };
-    raf = requestAnimationFrame(step);
-    const stop = () => setScrolling(false);
-    window.addEventListener("touchstart", stop, { passive: true });
-    return () => { cancelAnimationFrame(raf); window.removeEventListener("touchstart", stop); };
-  }, [scrolling, speed]);
   useEffect(() => {
     setHighlightAyah(targetAyah > 0 ? targetAyah : null);
   }, [number, targetAyah]);
@@ -351,7 +340,7 @@ export default function QuranWrittenReader() {
   return (
     <div className="pb-10" dir={uiDir}>
       {/* Sticky header */}
-      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border px-2 py-2 mb-4">
+      <div data-reader-header className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border px-2 py-2 mb-4">
         <div className="flex items-center gap-3 flex-row text-[#2d241b]">
           <Link href="/quran-written"
             className="text-muted-foreground hover:text-primary transition-colors"
@@ -377,9 +366,10 @@ export default function QuranWrittenReader() {
               className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center">
               {playingAyah && !paused ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
             </button>
-            <button onClick={() => setScrolling((v) => !v)} aria-label={tr("النزول التلقائي")}
-              className={`w-10 h-10 rounded-full flex items-center justify-center ${scrolling ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"}`}>
-              <ChevronsDown className="w-5 h-5" />
+            <button onClick={() => number < 114 && navigate(`/quran-written/${number + 1}`)} disabled={number >= 114}
+              aria-label={tr("السورة التالية")}
+              className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center disabled:opacity-40">
+              <SkipForward className="w-5 h-5 rtl:rotate-180" />
             </button>
             <button onClick={toggleTr} aria-label={tr("الترجمة الإنجليزية")}
               className={`h-10 px-2 rounded-full flex items-center gap-1 text-xs font-sans font-bold ${showTr ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"}`}>
@@ -387,13 +377,6 @@ export default function QuranWrittenReader() {
             </button>
           </div>
         </div>
-        {scrolling && (
-          <div className="flex items-center justify-center gap-3 pt-2 font-sans text-sm text-primary">
-            <button onClick={() => setSpeed((v) => Math.max(1, v - 1))} aria-label="-" className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center"><Minus className="w-4 h-4" /></button>
-            <span>{tr("سرعة النزول")}: {speed}</span>
-            <button onClick={() => setSpeed((v) => Math.min(10, v + 1))} aria-label="+" className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center"><Plus className="w-4 h-4" /></button>
-          </div>
-        )}
         {playingAyah && (
           <div className="flex items-center justify-center gap-3 pt-2 font-sans text-sm text-primary">
             <Volume2 className="w-4 h-4" />
