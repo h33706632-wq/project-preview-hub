@@ -2,6 +2,7 @@ import { Link } from "@/quran/wouter-shim";
 import illuminatedBookAsset from "@/assets/home-buttons/illuminated-book-button.jpg.asset.json";
 import minshawiHeaderUrl from "@/assets/minshawi-header-clear.webp";
 import { useLanguage } from "@/quran/components/language-provider";
+import { WelcomeGuide } from "@/quran/components/welcome-guide";
 import { BookOpen, Sparkles, Headphones, Compass, Clock, Heart } from "lucide-react";
 
 const homeBackground = `${import.meta.env.BASE_URL}quran-home-soft.jpg`;
@@ -125,6 +126,7 @@ export default function Home() {
           </Link>
         </nav>
       </div>
+      <WelcomeGuide />
     </main>
   );
 }
