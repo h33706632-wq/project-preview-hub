@@ -1,0 +1,341 @@
+import { useLanguage } from "@/quran/components/language-provider";
+import { useState, useEffect, useRef } from "react";
+import { Link, useLocation, useSearch } from "@/quran/wouter-shim";
+import { ChevronRight, Play, Pause, RotateCcw, RotateCw, SkipBack, SkipForward, Heart, Shuffle, Repeat1 } from "lucide-react";
+import { useSurahList } from "@/quran/hooks/useSurahList";
+import { useFavorites } from "@/quran/hooks/useFavorites";
+import { Skeleton } from "@/quran/components/ui/skeleton";
+import { OfflineDownloadButton } from "@/quran/components/offline-download-button";
+import { getCachedAudioObjectUrl, getLocalMurattalUrl, isSplitMurattal } from "@/quran/lib/offline-audio";
+import { getAyahMurattalUrl } from "@/quran/lib/quran-search";
+import { useStopOnAppExit } from "@/quran/hooks/useStopOnAppExit";
+import { Button } from "@/components/ui/button";
+import { Link as RouterLink } from "@tanstack/react-router";
+
+/* module-level flag — set before navigation so the next render can auto-play */
+let _autoPlayOnMount = false;
+/* The chosen play mode stays in effect across surahs until the user changes it. */
+let _playMode: "off" | "auto" | "shuffle" | "repeat" = "auto";
+
+export default function QuranAudioPlayer() {
+  const { t: tr, dir: uiDir, language, locale } = useLanguage();
+  const [location, setLocation] = useLocation();
+  const number = parseInt(location.split("/").pop() || "1");
+  const { surahs } = useSurahList();
+  const surah = surahs.find((s) => s.number === number);
+  const { isFavorite, toggle } = useFavorites();
+  const searchStr = useSearch();
+  const selectedAyah = Number(new URLSearchParams(searchStr).get("ayah"));
+  const targetAyah = Number.isInteger(selectedAyah) && selectedAyah > 0 && selectedAyah <= (surah?.numberOfAyahs ?? 286) ? selectedAyah : null;
+
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [buffering, setBuffering] = useState(false);
+  useStopOnAppExit(audioRef, () => { setPlaying(false); setBuffering(false); });
+  const [audioError, setAudioError] = useState(false);
+  const [playMode, setPlayModeState] = useState(_playMode);
+  const setPlayMode = (m: typeof _playMode) => { _playMode = m; setPlayModeState(m); };
+
+  const audioUrl = targetAyah ? getAyahMurattalUrl(number, targetAyah) : isSplitMurattal(number) ? "" : getLocalMurattalUrl(number);
+  /* The source is tagged with its surah so a stale address from the previous surah is never played. */
+  const [source, setSource] = useState({ number, url: audioUrl });
+  const audioSourceUrl = source.url;
+  const loadedNumberRef = useRef<number | null>(null);
+  const sourceObjectUrlRef = useRef<string | null>(null);
+
+  const prevNum  = number > 1   ? number - 1 : null;
+  const nextNum  = number < 114 ? number + 1 : null;
+  const prevSurah = surahs.find((s) => s.number === prevNum);
+  const nextSurah = surahs.find((s) => s.number === nextNum);
+
+  useEffect(() => {
+    let active = true;
+    setSource({ number, url: audioUrl });
+    if (targetAyah) return;
+
+    void getCachedAudioObjectUrl("murattal", number)
+      .then((cachedUrl) => {
+        if (!cachedUrl) return;
+        if (!active) {
+          URL.revokeObjectURL(cachedUrl);
+          return;
+        }
+        if (sourceObjectUrlRef.current) URL.revokeObjectURL(sourceObjectUrlRef.current);
+        sourceObjectUrlRef.current = cachedUrl;
+        setSource({ number, url: cachedUrl });
+      })
+      .catch(() => {
+        // A large surah could not be assembled: report it instead of spinning forever.
+        if (active && !audioUrl) { setBuffering(false); setPlaying(false); setAudioError(true); }
+      });
+
+    return () => {
+      active = false;
+      if (sourceObjectUrlRef.current) {
+        URL.revokeObjectURL(sourceObjectUrlRef.current);
+        sourceObjectUrlRef.current = null;
+      }
+    };
+  }, [number, audioUrl, targetAyah]);
+
+  /* load the surah's recitation; keep playing when the next surah was started automatically */
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (!audioSourceUrl || source.number !== number) {
+      // The new surah's recitation is still being prepared (large surahs are assembled first):
+      // drop the previous surah's audio now so its time and length never show or play here.
+      if (loadedNumberRef.current !== null && loadedNumberRef.current !== number) {
+        loadedNumberRef.current = null;
+        audio.pause();
+        audio.removeAttribute("src");
+        audio.load();
+        setPlaying(false);
+        setCurrentTime(0);
+        setDuration(0);
+        setAudioError(false);
+        setBuffering(_autoPlayOnMount);
+      }
+      return;
+    }
+    // Same surah switching to its saved offline copy: keep playing if it already was.
+    const keepPlaying = _autoPlayOnMount || (loadedNumberRef.current === number && !audio.paused);
+    _autoPlayOnMount = false;
+    loadedNumberRef.current = number;
+    audio.pause();
+    audio.src = audioSourceUrl;
+    audio.load();
+    setPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+    setBuffering(false);
+    setAudioError(false);
+
+    if (keepPlaying) {
+      setBuffering(true);
+      audio.play()
+        .then(() => { setPlaying(true); setBuffering(false); })
+        .catch(() => { setBuffering(false); });
+    }
+  }, [number, audioSourceUrl, source.number]);
+
+  function togglePlay() {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (!audio.getAttribute("src")) {
+      // Recitation still loading: start it as soon as it is ready.
+      _autoPlayOnMount = !_autoPlayOnMount;
+      setBuffering(_autoPlayOnMount);
+      return;
+    }
+    if (playing) {
+      audio.pause();
+      setPlaying(false);
+    } else {
+      setAudioError(false);
+      setBuffering(true);
+      audio.play()
+        .then(() => { setPlaying(true); setBuffering(false); })
+        .catch(() => { setBuffering(false); setAudioError(true); });
+    }
+  }
+
+  function handleEnded() {
+    if (loadedNumberRef.current !== number) return;
+    if (targetAyah) { setPlaying(false); setCurrentTime(0); return; }
+    if (playMode === "repeat") {
+      const audio = audioRef.current;
+      if (audio) {
+        audio.currentTime = 0;
+        void audio.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+      }
+    } else if (playMode === "shuffle") {
+      let randomNum = Math.floor(Math.random() * 114) + 1;
+      if (randomNum === number) randomNum = (number % 114) + 1;
+      _autoPlayOnMount = true;
+      setLocation(`/quran-audio/${randomNum}`);
+    } else if (playMode === "auto" && nextNum) {
+      _autoPlayOnMount = true;
+      setLocation(`/quran-audio/${nextNum}`);
+    } else {
+      setPlaying(false);
+      setCurrentTime(0);
+    }
+  }
+
+  function goNext() {
+    if (!nextNum) return;
+    _autoPlayOnMount = false; audioRef.current?.pause(); setPlaying(false); setBuffering(false);
+    setLocation(`/quran-audio/${nextNum}`);
+  }
+
+  function goPrev() {
+    if (!prevNum) return;
+    _autoPlayOnMount = false; audioRef.current?.pause(); setPlaying(false); setBuffering(false);
+    setLocation(`/quran-audio/${prevNum}`);
+  }
+
+  function seekBy(seconds: number) {
+    if (!audioRef.current) return;
+    const nextTime = Math.min(Math.max(audioRef.current.currentTime + seconds, 0), duration || Infinity);
+    audioRef.current.currentTime = nextTime;
+    setCurrentTime(nextTime);
+  }
+
+  /** Browsers refine the length of a recitation while it loads; always show the latest real value. */
+  function syncDuration() {
+    const d = audioRef.current?.duration;
+    if (d && Number.isFinite(d)) setDuration(d);
+  }
+
+  function formatTime(s: number) {
+    if (!isFinite(s)) return "0:00:00";
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = Math.floor(s % 60);
+    return `${h}:${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
+  }
+
+  return (
+    <div className="max-w-lg mx-auto space-y-6 pb-10 pt-2" dir={uiDir}>
+      {/* back */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Link href="/quran-audio" className="text-muted-foreground hover:text-primary transition-colors" data-testid="link-back-list">
+            <ChevronRight className="w-6 h-6" />
+          </Link>
+          <p className="text-muted-foreground text-sm font-sans">{tr("قائمة السور")}</p>
+        </div>
+        {/* favourite */}
+        <div className="flex items-center gap-2">
+          <OfflineDownloadButton type="murattal" number={number} showLabel />
+          <button
+            onClick={() => toggle(number)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all text-sm font-sans ${
+              isFavorite(number)
+                ? "border-rose-400 text-rose-500 bg-rose-50"
+                : "border-border text-muted-foreground hover:border-rose-400 hover:text-rose-500"
+            }`}
+            data-testid="btn-fav-player">
+            <Heart className="w-4 h-4" fill={isFavorite(number) ? "currentColor" : "none"} />
+            {isFavorite(number) ? tr("في المفضلة") : tr("أضف للمفضلة")}
+          </button>
+        </div>
+      </div>
+      {/* surah title */}
+      <div className="text-center space-y-2">
+        {surah ? (
+          <>
+            <h1 className="font-serif text-5xl text-primary">{surah.name}</h1>
+            <p className="font-sans text-muted-foreground">{surah.englishName} — {surah.englishNameTranslation}</p>
+            <p className="font-sans text-xs text-muted-foreground">
+              {surah.numberOfAyahs} آية — {surah.revelationType === "Meccan" ? tr("مكية") : tr("مدنية")}
+            </p>
+          </>
+        ) : <Skeleton className="h-12 w-48 mx-auto" />}
+      </div>
+      {targetAyah && (
+        <div className="space-y-3 border-y border-border py-4 text-center">
+          <p className="font-serif text-xl text-primary">{tr("الآية")}{targetAyah}</p>
+          <p className="text-xs text-muted-foreground">{tr("تلاوة الآية تتطلب اتصالاً بالإنترنت")}</p>
+          <Button asChild variant="outline" size="sm">
+            <RouterLink to="/quran-audio/$number" params={{ number: String(number) }} search={{}}>{tr("استماع للسورة كاملة")}</RouterLink>
+          </Button>
+        </div>
+      )}
+      {audioError && <p role="alert" className="text-center text-sm text-foreground">{tr("تعذر تشغيل التلاوة. تحقق من الاتصال وحاول مجدداً.")}</p>}
+      {/* player card */}
+      <div className="bg-card border border-border rounded-3xl p-6 sm:p-8 space-y-6 shadow-sm pt-[24px] pb-[24px] pl-[24px] pr-[24px] mb-[400px] mt-[0px] ml-[0px] mr-[0px] text-left">
+        {/* seek bar */}
+        <div className="space-y-2">
+          <input type="range" min={0} max={duration || 100} value={currentTime}
+            onChange={(e) => {
+              const t = parseFloat(e.target.value);
+              if (audioRef.current) { audioRef.current.currentTime = t; setCurrentTime(t); }
+            }}
+            className="w-full h-2 accent-primary cursor-pointer" data-testid="input-seek" />
+          <div className="flex justify-between font-sans text-xs text-muted-foreground" dir="ltr">
+            <span>{formatTime(duration ? Math.min(currentTime, duration) : currentTime)}</span>
+            <span>{formatTime(duration)}</span>
+          </div>
+        </div>
+
+        {/* central control cluster */}
+        <div className="flex items-center justify-center gap-3 sm:gap-5" dir="ltr">
+          <button onClick={goPrev} disabled={!prevNum} aria-label={tr("السورة السابقة")}
+            className="w-10 h-10 rounded-full border border-primary/25 bg-primary/90 text-primary-foreground hover:bg-primary disabled:opacity-30 transition-all"
+            data-testid="button-prev-surah">
+            <SkipBack className="w-5 h-5 mx-auto" />
+          </button>
+          <button onClick={() => seekBy(10)} aria-label={tr("تقديم 10 ثوانٍ")}
+            className="w-10 h-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/85 transition-all"
+            data-testid="button-seek-backward">
+            <span className="relative block">
+              <RotateCw className="w-6 h-6 mx-auto" />
+              <span className="absolute inset-0 flex items-center justify-center text-primary-foreground text-[10px] font-normal">10</span>
+            </span>
+          </button>
+          <button onClick={togglePlay} aria-label={playing ? tr("إيقاف التلاوة مؤقتاً") : tr("تشغيل التلاوة")}
+            className="w-20 h-20 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg hover:bg-primary/90 transition-all active:scale-95"
+            data-testid="button-play-pause">
+            {buffering
+              ? <div className="w-7 h-7 border-[3px] border-primary-foreground border-t-transparent rounded-full animate-spin" />
+              : playing
+                ? <Pause className="w-8 h-8" />
+                : <Play className="w-8 h-8 mr-[-3px]" />
+            }
+          </button>
+          <button onClick={() => seekBy(-10)} aria-label={tr("تأخير 10 ثوانٍ")}
+            className="w-10 h-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/85 transition-all"
+            data-testid="button-seek-forward">
+            <span className="relative block">
+              <RotateCcw className="w-6 h-6 mx-auto" />
+              <span className="absolute inset-0 flex items-center justify-center text-[10px] font-normal text-primary-foreground">10</span>
+            </span>
+          </button>
+          <button onClick={goNext} disabled={!nextNum} aria-label={tr("السورة التالية")}
+            className="w-10 h-10 rounded-full border border-primary/25 bg-primary/90 text-primary-foreground hover:bg-primary disabled:opacity-30 transition-all"
+            data-testid="button-next-surah">
+            <SkipForward className="w-5 h-5 mx-auto" />
+          </button>
+        </div>
+
+        {/* restart / quick navigation */}
+        <div className="flex items-center justify-center gap-6 text-xs font-sans">
+          <button onClick={() => {
+            if (audioRef.current) { audioRef.current.currentTime = 0; setCurrentTime(0); }
+          }} className="flex items-center gap-1.5 text-muted-foreground hover:text-primary transition-colors" data-testid="button-restart">
+            <RotateCcw className="w-4 h-4" /> {tr("إعادة")}</button>
+          {prevSurah && <button onClick={goPrev} className="text-primary hover:underline">{prevSurah.name}</button>}
+          {nextSurah && <button onClick={goNext} className="text-primary hover:underline">{nextSurah.name}</button>}
+        </div>
+
+        {/* playback mode */}
+        <div className="flex items-center justify-center gap-2 pt-4 border-t border-border">
+          <select value={playMode} onChange={(e) => setPlayMode(e.target.value as typeof playMode)}
+            className="bg-background border border-border rounded-xl px-3 py-2 text-xs font-sans text-foreground outline-none focus:ring-2 focus:ring-primary/30"
+            aria-label={tr("خاصية التشغيل التلقائي")} data-testid="select-play-mode">
+            <option value="auto">{tr("التشغيل التلقائي")}</option>
+            <option value="shuffle">{tr("التشغيل العشوائي")}</option>
+            <option value="repeat">{tr("تكرار السورة")}</option>
+            <option value="off">{tr("إيقاف التشغيل التلقائي")}</option>
+          </select>
+          {playMode === "shuffle" ? <Shuffle className="w-4 h-4 text-primary" /> : playMode === "repeat" ? <Repeat1 className="w-4 h-4 text-primary" /> : <RotateCw className={`w-4 h-4 ${playMode === "auto" ? "text-primary" : "text-muted-foreground"}`} />}
+        </div>
+      </div>
+      <audio ref={audioRef}
+        onTimeUpdate={() => { const a = audioRef.current; if (a && loadedNumberRef.current === number) setCurrentTime(a.currentTime); }}
+        onLoadedMetadata={syncDuration}
+        onDurationChange={syncDuration}
+        onEnded={handleEnded}
+        onWaiting={() => setBuffering(true)}
+        onPlaying={() => setBuffering(false)}
+        onError={() => { if (!audioRef.current?.getAttribute("src")) return; setAudioError(true); setBuffering(false); setPlaying(false); }}
+        preload="none" />
+      <p className="font-sans text-xs text-center text-muted-foreground">
+        {tr("تلاوة الشيخ محمد صديق المنشاوي — رحمه الله")}</p>
+    </div>
+  );
+}
