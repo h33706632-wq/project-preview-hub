@@ -12,7 +12,6 @@
 - [ ] Native APK compile/run on a device — needs Android Studio on the user's computer.- [x] Android startup screen: keep the spinning dot ring in its exact place (right-to-left layout moved it).
 - [x] Home page base color: calm soft white.
 - [x] Recitation timer: correct total length and elapsed time.
-- [x] Synchronize both recitation counters with the active audio and verify playback, pause and seeking.
 - [x] Illuminated Book: show the video picture as soon as the page opens.
 - [x] Illuminated Book answers inside the Android app.
 

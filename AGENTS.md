@@ -41,6 +41,5 @@ use the editor.
 
 - Hadith books ship inside the APK, so on native they are read straight from the bundled files (no Cache API); on web, caching is best-effort and must never block reading.
 - Player auto-advance tags each audio source with its surah number so a stale source from the previous surah is never loaded or played.
-- Both recitation players use the shared media-clock hook and timing helpers; reading the active audio element prevents drift during buffering, pauses, seeking and source changes.
 - Keep Qibla alignment in a pure angle-comparison helper with hysteresis, and expire missing sensor readings so the light cannot falsely remain green.
 - Keep app wording in the shared Arabic/English language provider and bundle the English Quran as per-surah modules, so language choice persists and the APK reads the translation offline.
