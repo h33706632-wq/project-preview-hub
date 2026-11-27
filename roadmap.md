@@ -1,5 +1,7 @@
 # Tasks
 
+- [ ] Synchronize both recitation timers with the actual media clock and verify playback, pause, seek, and source changes.
+
 - [x] Add Arabic/English language selection, translated interface, and question-language answers.
 - [x] Bundle all 114 surahs in a dedicated English Quran reading page and verify navigation and saved language.
 

@@ -8,6 +8,8 @@ import { Skeleton } from "@/quran/components/ui/skeleton";
 import { OfflineDownloadButton } from "@/quran/components/offline-download-button";
 import { getCachedAudioObjectUrl, getLocalMurattalUrl, isSplitMurattal } from "@/quran/lib/offline-audio";
 import { getAyahMurattalUrl } from "@/quran/lib/quran-search";
+import { useAudioClock } from "@/quran/hooks/useAudioClock";
+import { formatAudioTime as formatTime, seekAudio } from "@/quran/lib/audio-clock";
 import { useStopOnAppExit } from "@/quran/hooks/useStopOnAppExit";
 import { Button } from "@/components/ui/button";
 import { Link as RouterLink } from "@tanstack/react-router";
@@ -30,8 +32,8 @@ export default function QuranAudioPlayer() {
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const sourceKey = `${number}:${targetAyah ?? "surah"}`;
+  const { currentTime, duration } = useAudioClock(audioRef, sourceKey);
   const [buffering, setBuffering] = useState(false);
   useStopOnAppExit(audioRef, () => { setPlaying(false); setBuffering(false); });
   const [audioError, setAudioError] = useState(false);
@@ -59,6 +61,11 @@ export default function QuranAudioPlayer() {
       .then((cachedUrl) => {
         if (!cachedUrl) return;
         if (!active) {
+          URL.revokeObjectURL(cachedUrl);
+          return;
+        }
+        // Do not restart the media clock to switch to a cached copy mid-recitation.
+        if (audioRef.current && (audioRef.current.currentTime > 0 || !audioRef.current.paused)) {
           URL.revokeObjectURL(cachedUrl);
           return;
         }
@@ -93,8 +100,6 @@ export default function QuranAudioPlayer() {
         audio.removeAttribute("src");
         audio.load();
         setPlaying(false);
-        setCurrentTime(0);
-        setDuration(0);
         setAudioError(false);
         setBuffering(_autoPlayOnMount);
       }
@@ -105,11 +110,10 @@ export default function QuranAudioPlayer() {
     _autoPlayOnMount = false;
     loadedNumberRef.current = number;
     audio.pause();
+    audio.dataset["sourceKey"] = sourceKey;
     audio.src = audioSourceUrl;
     audio.load();
     setPlaying(false);
-    setCurrentTime(0);
-    setDuration(0);
     setBuffering(false);
     setAudioError(false);
 
@@ -119,7 +123,7 @@ export default function QuranAudioPlayer() {
         .then(() => { setPlaying(true); setBuffering(false); })
         .catch(() => { setBuffering(false); });
     }
-  }, [number, audioSourceUrl, source.number]);
+  }, [number, audioSourceUrl, source.number, sourceKey]);
 
   function togglePlay() {
     const audio = audioRef.current;
@@ -144,7 +148,7 @@ export default function QuranAudioPlayer() {
 
   function handleEnded() {
     if (loadedNumberRef.current !== number) return;
-    if (targetAyah) { setPlaying(false); setCurrentTime(0); return; }
+    if (targetAyah) { setPlaying(false); return; }
     if (playMode === "repeat") {
       const audio = audioRef.current;
       if (audio) {
@@ -161,8 +165,7 @@ export default function QuranAudioPlayer() {
       setLocation(`/quran-audio/${nextNum}`);
     } else {
       setPlaying(false);
-      setCurrentTime(0);
-    }
+      }
   }
 
   function goNext() {
@@ -178,24 +181,8 @@ export default function QuranAudioPlayer() {
   }
 
   function seekBy(seconds: number) {
-    if (!audioRef.current) return;
-    const nextTime = Math.min(Math.max(audioRef.current.currentTime + seconds, 0), duration || Infinity);
-    audioRef.current.currentTime = nextTime;
-    setCurrentTime(nextTime);
-  }
-
-  /** Browsers refine the length of a recitation while it loads; always show the latest real value. */
-  function syncDuration() {
-    const d = audioRef.current?.duration;
-    if (d && Number.isFinite(d)) setDuration(d);
-  }
-
-  function formatTime(s: number) {
-    if (!isFinite(s)) return "0:00:00";
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const sec = Math.floor(s % 60);
-    return `${h}:${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
+    const audio = audioRef.current;
+    if (audio) seekAudio(audio, audio.currentTime + seconds);
   }
 
   return (
@@ -250,15 +237,15 @@ export default function QuranAudioPlayer() {
       <div className="bg-card border border-border rounded-3xl p-6 sm:p-8 space-y-6 shadow-sm pt-[24px] pb-[24px] pl-[24px] pr-[24px] mb-[400px] mt-[0px] ml-[0px] mr-[0px] text-left">
         {/* seek bar */}
         <div className="space-y-2">
-          <input type="range" min={0} max={duration || 100} value={currentTime}
+          <input type="range" min={0} max={duration || 1} value={duration ? currentTime : 0} step="any" disabled={!duration}
             onChange={(e) => {
               const t = parseFloat(e.target.value);
-              if (audioRef.current) { audioRef.current.currentTime = t; setCurrentTime(t); }
+              if (audioRef.current) seekAudio(audioRef.current, t);
             }}
             className="w-full h-2 accent-primary cursor-pointer" data-testid="input-seek" />
-          <div className="flex justify-between font-sans text-xs text-muted-foreground" dir="ltr">
-            <span>{formatTime(duration ? Math.min(currentTime, duration) : currentTime)}</span>
-            <span>{formatTime(duration)}</span>
+          <div className="flex justify-between font-sans tabular-nums text-xs text-muted-foreground" dir="ltr">
+            <span>{formatTime(currentTime)}</span>
+            <span>{duration ? formatTime(duration) : "—:——:——"}</span>
           </div>
         </div>
 
@@ -305,7 +292,7 @@ export default function QuranAudioPlayer() {
         {/* restart / quick navigation */}
         <div className="flex items-center justify-center gap-6 text-xs font-sans">
           <button onClick={() => {
-            if (audioRef.current) { audioRef.current.currentTime = 0; setCurrentTime(0); }
+            if (audioRef.current) seekAudio(audioRef.current, 0);
           }} className="flex items-center gap-1.5 text-muted-foreground hover:text-primary transition-colors" data-testid="button-restart">
             <RotateCcw className="w-4 h-4" /> {tr("إعادة")}</button>
           {prevSurah && <button onClick={goPrev} className="text-primary hover:underline">{prevSurah.name}</button>}
@@ -326,14 +313,11 @@ export default function QuranAudioPlayer() {
         </div>
       </div>
       <audio ref={audioRef}
-        onTimeUpdate={() => { const a = audioRef.current; if (a && loadedNumberRef.current === number) setCurrentTime(a.currentTime); }}
-        onLoadedMetadata={syncDuration}
-        onDurationChange={syncDuration}
         onEnded={handleEnded}
         onWaiting={() => setBuffering(true)}
         onPlaying={() => setBuffering(false)}
         onError={() => { if (!audioRef.current?.getAttribute("src")) return; setAudioError(true); setBuffering(false); setPlaying(false); }}
-        preload="none" />
+        preload="metadata" />
       <p className="font-sans text-xs text-center text-muted-foreground">
         {tr("تلاوة الشيخ محمد صديق المنشاوي — رحمه الله")}</p>
     </div>
