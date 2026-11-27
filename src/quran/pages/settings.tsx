@@ -16,10 +16,6 @@ export default function Settings() {
         <span className="font-semibold text-foreground">{ar ? "لغة التطبيق" : "App language"}</span>
         <LanguagePicker />
       </div>
-      <Link href="/notifications" className="flex items-center justify-between rounded-xl border border-border bg-card p-4 font-semibold text-foreground">
-        {ar ? "الإشعارات والتذكير" : "Notifications & reminders"}
-        {ar ? <ChevronLeft className="size-5" /> : <ChevronRight className="size-5" />}
-      </Link>
       <Link href="/privacy" className="flex items-center justify-between rounded-xl border border-border bg-card p-4 font-semibold text-foreground">
         {ar ? "سياسة الخصوصية" : "Privacy policy"}
         {ar ? <ChevronLeft className="size-5" /> : <ChevronRight className="size-5" />}

@@ -5,7 +5,7 @@ import { showsBanner } from "@/quran/lib/credits";
 import { BottomNavigation } from "./bottom-navigation";
 
 /** Pages that carry the bottom navigation pill. */
-const NAV_PAGES = new Set(["/", "/search", "/notifications"]);
+const NAV_PAGES = new Set(["/", "/search", "/notifications", "/settings"]);
 
 export function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
