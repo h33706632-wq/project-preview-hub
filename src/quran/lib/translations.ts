@@ -1,5 +1,5 @@
 export const ENGLISH: Record<string, string> = {
-  "الرئيسية": "Home", "الإشعارات": "Notifications", "البحث": "Search", "التنقل السفلي": "Navigation",
+  "الرئيسية": "Home", "الإشعارات": "Notifications", "البحث": "Search", "الإعدادات": "Settings", "التنقل السفلي": "Navigation",
   "الصفحة الرئيسية": "Home", "أقسام التطبيق": "App sections", "العودة": "Back", "العودة للرئيسية": "Back to home", "رجوع": "Back", "العودة للأذكار": "Back to adhkar",
   "القرآن الكريم مرتل بدون نت": "Quran recitations · Offline", "القرآن الكريم مجود": "Quran · Mujawwad recitations", "القرآن الكريم مكتوب": "Read the Arabic Quran",
   "القرآن الكريم المرتل": "Quran · Murattal", "القرآن الكريم المجوّد": "Quran · Mujawwad", "بصوت الشيخ محمد صديق المنشاوي": "Recited by Muhammad Siddiq Al-Minshawi",

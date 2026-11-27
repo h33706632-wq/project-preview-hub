@@ -19,6 +19,7 @@ import { Route as PrayerTimesRouteImport } from './routes/prayer-times'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as QiblaRouteImport } from './routes/qibla'
 import { Route as SearchRouteImport } from './routes/search'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as TasbeehRouteImport } from './routes/tasbeeh'
 import { Route as AdhkarIndexRouteImport } from './routes/adhkar/index'
 import { Route as AdhkarCategoryRouteImport } from './routes/adhkar/$category'
@@ -86,6 +87,11 @@ const QiblaRoute = QiblaRouteImport.update({
 const SearchRoute = SearchRouteImport.update({
   id: '/search',
   path: '/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TasbeehRoute = TasbeehRouteImport.update({
@@ -191,6 +197,7 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/qibla': typeof QiblaRoute
   '/search': typeof SearchRoute
+  '/settings': typeof SettingsRoute
   '/tasbeeh': typeof TasbeehRoute
   '/adhkar/$category': typeof AdhkarCategoryRoute
   '/hadith/$book': typeof HadithBookRoute
@@ -221,6 +228,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/qibla': typeof QiblaRoute
   '/search': typeof SearchRoute
+  '/settings': typeof SettingsRoute
   '/tasbeeh': typeof TasbeehRoute
   '/adhkar/$category': typeof AdhkarCategoryRoute
   '/hadith/$book': typeof HadithBookRoute
@@ -252,6 +260,7 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/qibla': typeof QiblaRoute
   '/search': typeof SearchRoute
+  '/settings': typeof SettingsRoute
   '/tasbeeh': typeof TasbeehRoute
   '/adhkar/$category': typeof AdhkarCategoryRoute
   '/hadith/$book': typeof HadithBookRoute
@@ -284,6 +293,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/qibla'
     | '/search'
+    | '/settings'
     | '/tasbeeh'
     | '/adhkar/$category'
     | '/hadith/$book'
@@ -314,6 +324,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/qibla'
     | '/search'
+    | '/settings'
     | '/tasbeeh'
     | '/adhkar/$category'
     | '/hadith/$book'
@@ -344,6 +355,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/qibla'
     | '/search'
+    | '/settings'
     | '/tasbeeh'
     | '/adhkar/$category'
     | '/hadith/$book'
@@ -375,6 +387,7 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   QiblaRoute: typeof QiblaRoute
   SearchRoute: typeof SearchRoute
+  SettingsRoute: typeof SettingsRoute
   TasbeehRoute: typeof TasbeehRoute
   AdhkarCategoryRoute: typeof AdhkarCategoryRoute
   HadithBookRoute: typeof HadithBookRoute
@@ -465,6 +478,13 @@ declare module '@tanstack/react-router' {
       path: '/search'
       fullPath: '/search'
       preLoaderRoute: typeof SearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tasbeeh': {
@@ -607,6 +627,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   QiblaRoute: QiblaRoute,
   SearchRoute: SearchRoute,
+  SettingsRoute: SettingsRoute,
   TasbeehRoute: TasbeehRoute,
   AdhkarCategoryRoute: AdhkarCategoryRoute,
   HadithBookRoute: HadithBookRoute,

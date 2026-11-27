@@ -94,7 +94,6 @@ export default function Home() {
           aria-hidden="true"
         />
         <nav className="home-button-stack" aria-label={t("أقسام التطبيق")}>
-          <div className="flex justify-end py-1"><Link href="/notifications" className="text-sm text-primary underline">{language === "ar" ? "الإعدادات" : "Settings"}</Link></div>
           <Link href="/quran-english" className="home-image-button" data-testid="link-quran-english" aria-label="The Holy Quran in English">{language === "en" ? <span className="flex items-center gap-4 rounded-lg border border-border bg-card p-5"><BookOpen className="size-6 shrink-0 text-accent"/><span className="font-semibold text-primary">The Holy Quran in English</span></span> : <img src={buttonAsset("quran-english-new")} alt="The Holy Quran in English — Complete and written out" draggable={false} />}</Link>
               <Link
                 href="/illuminated-book"

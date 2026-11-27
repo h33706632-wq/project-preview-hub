@@ -1,7 +1,7 @@
 import { useLanguage } from "@/quran/components/language-provider";
 import { Link, useLocation } from "@tanstack/react-router";
 import type { MouseEvent, SVGProps } from "react";
-import { Bell, Search, type LucideIcon } from "lucide-react";
+import { Bell, Search, Settings, type LucideIcon } from "lucide-react";
 
 /** Solid house with a light door, as in the supplied bar design. */
 function HomeSolid(props: SVGProps<SVGSVGElement>) {
@@ -18,6 +18,7 @@ const items: ReadonlyArray<{ to: string; label: string; icon: LucideIcon | typeo
   { to: "/", label: "الرئيسية", icon: HomeSolid, tone: "home" },
   { to: "/notifications", label: "الإشعارات", icon: Bell, tone: "bell" },
   { to: "/search", label: "البحث", icon: Search, tone: "search" },
+  { to: "/settings", label: "الإعدادات", icon: Settings, tone: "settings" },
 ];
 
 /** Replays the tapped icon's own short animation (bell rings, …) without re-rendering. */

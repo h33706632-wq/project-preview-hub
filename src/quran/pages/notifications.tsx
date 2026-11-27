@@ -7,7 +7,6 @@ import { Input } from "@/quran/components/ui/input";
 import { Button } from "@/quran/components/ui/button";
 import { DEFAULT_SETTINGS, type ReminderSettings } from "@/quran/lib/reminder-schedule";
 import { applyReminders, isNativeApp, loadSettings, requestPermission, saveSettings } from "@/quran/lib/reminders";
-import { LanguagePicker } from "@/quran/components/language-picker";
 
 export default function Notifications() {
   const { t: tr, dir: uiDir, language, locale } = useLanguage();
@@ -51,7 +50,6 @@ export default function Notifications() {
         <Link href="/" className="p-2 text-foreground" aria-label={tr("العودة")}><ChevronRight /></Link>
         <h1 className="text-2xl font-bold text-foreground">{tr("الإشعارات والتذكير")}</h1>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b py-3"><span className="font-semibold">{language === "ar" ? "لغة التطبيق" : "App language"}</span><LanguagePicker/></div>
       {row(tr("أذكار الصباح"), "morningEnabled", "morningTime")}
       {row(tr("أذكار المساء"), "eveningEnabled", "eveningTime")}
       {row(tr("تسبيحة أو دعاء كل نصف ساعة"), "halfHourlyEnabled")}
